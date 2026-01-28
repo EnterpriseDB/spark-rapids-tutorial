@@ -1,5 +1,8 @@
 This README is designed to provide a professional, "day-zero" experience for developers and data engineers using the companion repository for the **EDB Postgres Analytics Accelerator (AA)** tutorial.
 
+> [!IMPORTANT]
+> **Support Disclaimer**: This repository and the code artifacts contained herein are provided for educational and tutorial purposes only. This project is **not supported by EnterpriseDB (EDB)**. Use of this code is at your own risk and is not covered by any EDB support agreements or SLAs.
+
 ---
 
 # EDB Postgres AI: Spark RAPIDS Accelerator Tutorial

@@ -1,0 +1,17 @@
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the same folder of a tutorial
+.Spotlight-V100
+.Trashes
+
+# Common build/dependency directories (Optional - uncomment if needed)
+# node_modules/
+# __pycache__/
+# *.log
+# .env
