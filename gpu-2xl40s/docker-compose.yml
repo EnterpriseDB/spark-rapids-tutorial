@@ -1,0 +1,109 @@
+x-vars:
+  spark_image: &spark_image "spark:3.5.6-java17"
+  worker_memory: &worker_memory "${SPARK_WORKER_MEMORY:-256g}"
+  worker_cores: &worker_cores "${SPARK_WORKER_CORES:-16}"
+  gpu_count: &gpu_count "${GPU_COUNT:-2}"
+
+x-spark-common: &spark-common
+  image: *spark_image
+  runtime: nvidia
+  environment: &common-environment
+    SPARK_NO_DAEMONIZE: "true"
+    SPARK_LOCAL_DIRS: /data/spark
+    SPARK_WORK_DIR: /data/spark-app
+
+  volumes:
+    - /data/spark-app:/data/spark
+    - /data/spark-app/:/data/spark-app
+    - /ephemeral/tpcds_sf_100:/data/tpcds_data
+x-spark-worker: &spark-worker
+  <<: *spark-common
+  depends_on:
+    - spark-master
+  command:
+    - /opt/spark/sbin/start-worker.sh
+    - spark://spark-master:7077
+    - --memory
+    - *worker_memory
+    - --cores
+    - *worker_cores
+  environment: &worker-environment
+    <<: *common-environment
+    SPARK_WORKER_OPTS: >-
+      -Dspark.worker.resource.gpu.discoveryScript=/opt/spark/examples/src/main/scripts/getGpusResources.sh
+      -Dspark.worker.resource.gpu.amount="2"
+      -Dspark.executor.extraJavaOptions="-Djava.io.tmpdir=/data/spark"
+
+services:
+  postgres:
+    platform: linux/amd64
+    build:
+      context: ./postgres-17-pgaa
+      args:
+        - EDB_TOKEN=${EDB_TOKEN}
+    container_name: postgres 
+    environment:
+      - POSTGRES_PASSWORD=password
+      - PGDATA=/data/pg_data
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/data/pg_data
+      - /ephemeral/tpcds_sf_100:/data/tpcds_data
+  spark-master:
+    image: *spark_image
+    hostname: spark-master
+    container_name: spark-master
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    command: /opt/spark/sbin/start-master.sh
+    ports: ["8080:8080", "7077:7077"]
+
+  spark-connect:
+    <<: *spark-common
+    container_name: spark-connect
+    depends_on: ["spark-master"]
+    ports: ["4040:4040", "15002:15002"]
+    command: >
+      /opt/spark/sbin/start-connect-server.sh --master spark://spark-master:7077
+      --packages "org.apache.spark:spark-connect_2.12:3.5.6,com.nvidia:rapids-4-spark_2.12:25.10.0,io.delta:delta-spark_2.12:3.3.1,org.apache.hadoop:hadoop-aws:3.3.4"
+      --conf "spark.executor.extraClassPath=/data/spark-app/jars/com.nvidia_rapids-4-spark_2.12-25.10.0.jar"
+      --conf "spark.driver.extraJavaOptions=-Divy.cache.dir=/data/spark -Divy.home=/data/spark -Djava.io.tmpdir=/data/spark"
+      --conf "spark.executor.extraJavaOptions=-Djava.io.tmpdir=/data/spark"
+      --conf "spark.driver.memory=16g"
+      --conf "spark.executor.cores=8"
+      --conf "spark.executor.instances=2"
+      --conf "spark.executor.memory=64g"
+      --conf "spark.rapids.filecache.enabled=true"
+      --conf "spark.executor.resource.gpu.amount=1"
+      --conf "spark.task.resource.gpu.amount=0.0625"
+      --conf "spark.scheduler.minRegisteredResourcesRatio=1.0"
+      --conf "spark.locality.wait=0s"
+      --conf "spark.sql.files.maxPartitionBytes=2GB"
+      --conf "spark.rapids.shuffle.multiThreaded.reader.threads=32"
+      --conf "spark.rapids.shuffle.multiThreaded.writer.threads=32"
+      --conf "spark.rapids.sql.multiThreadedRead.numThreads=32"
+      --conf "spark.plugins=com.nvidia.spark.SQLPlugin"
+      --conf "spark.rapids.memory.host.spillStorageSize=16g"
+      --conf "spark.rapids.memory.pinnedPool.size=8g"
+      --conf "spark.rapids.sql.concurrentGpuTasks=3"
+      --conf "spark.rapids.sql.enabled=true"
+      --conf "spark.shuffle.manager=com.nvidia.spark.rapids.spark356.RapidsShuffleManager"
+      -conf "spark.shuffle.manager=com.nvidia.spark.rapids.spark356.RapidsShuffleManager"
+      
+
+  spark-worker-0:
+    <<: *spark-worker
+    hostname: spark-worker-0
+    environment:
+      GPU_COUNT: 2
+      <<: *worker-environment
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              device_ids: ["all"]
+volumes:
+  postgres_data:
