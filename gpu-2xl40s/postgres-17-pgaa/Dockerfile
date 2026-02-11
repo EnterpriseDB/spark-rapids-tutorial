@@ -4,7 +4,7 @@ ARG EDB_TOKEN
 
 # 1. Install PGAA
 RUN apt-get update && apt-get install -y curl ca-certificates sudo \
-    && curl -1sSLf "https://downloads.enterprisedb.com/${EDB_TOKEN}/dev/setup.deb.sh" | sudo -E bash \
+    && curl -1sSLf "https://downloads.enterprisedb.com/${EDB_TOKEN}/standard/setup.deb.sh" | sudo -E bash \
     && apt-get update && apt-get install -y postgresql-17-pgaa
 
 # 2. Setup Data Directory
